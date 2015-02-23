@@ -56,7 +56,11 @@ static void ReadFileDescriptorAndOutputLinesToBlock(int inputFD,
     if (bytesRead > 0) {
       @autoreleasepool {
         NSString *str = [[NSString alloc] initWithBytes:readBuffer length:bytesRead encoding:NSUTF8StringEncoding];
-        [buffer appendString:str];
+
+        if (str != nil) {
+            [buffer appendString:str];
+        }
+
         [str release];
 
         processBuffer();
