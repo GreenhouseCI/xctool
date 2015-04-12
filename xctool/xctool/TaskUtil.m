@@ -22,7 +22,8 @@
 #import "Swizzle.h"
 #import "XCToolUtil.h"
 
-static void readOutputs(NSString **outputs, int *fildes, int sz) {
+static NSArray *readOutputs(int *fildes, int sz) {
+  NSMutableArray *outputs = [NSMutableArray arrayWithCapacity:sz];
   struct pollfd fds[sz];
   dispatch_data_t data[sz];
 
@@ -87,11 +88,13 @@ static void readOutputs(NSString **outputs, int *fildes, int sz) {
     dispatch_data_t contig = dispatch_data_create_map(data[i], &dataPtr, &dataSz);
 
     NSString *str = [[NSString alloc] initWithBytes:dataPtr length:dataSz encoding:NSUTF8StringEncoding];
-    outputs[i] = str;
+    [outputs addObject:str];
 
     dispatch_release(data[i]);
     dispatch_release(contig);
   }
+
+  return outputs;
 }
 
 NSDictionary *LaunchTaskAndCaptureOutput(NSTask *task, NSString *description)
@@ -106,10 +109,9 @@ NSDictionary *LaunchTaskAndCaptureOutput(NSTask *task, NSString *description)
   [task setStandardError:stderrPipe];
   LaunchTaskAndMaybeLogCommand(task, description);
 
-  NSString *outputs[2] = {nil, nil};
   int fides[2] = {stdoutHandle.fileDescriptor, stderrHandle.fileDescriptor};
 
-  readOutputs(outputs, fides, 2);
+  NSArray *outputs = readOutputs(fides, 2);
 
   [task waitUntilExit];
 
@@ -117,9 +119,6 @@ NSDictionary *LaunchTaskAndCaptureOutput(NSTask *task, NSString *description)
             @"output should have been populated");
 
   NSDictionary *output = @{@"stdout" : outputs[0], @"stderr" : outputs[1]};
-
-  [outputs[0] release];
-  [outputs[1] release];
 
   return output;
 }
@@ -133,17 +132,16 @@ NSString *LaunchTaskAndCaptureOutputInCombinedStream(NSTask *task, NSString *des
   [task setStandardError:outputPipe];
   LaunchTaskAndMaybeLogCommand(task, description);
 
-  NSString *outputs[1] = {nil};
   int fides[1] = {outputHandle.fileDescriptor};
 
-  readOutputs(outputs, fides, 1);
+  NSArray *outputs = readOutputs(fides, 1);
 
   [task waitUntilExit];
 
   NSCAssert(outputs[0] != nil,
             @"output should have been populated");
 
-  return [outputs[0] autorelease];
+  return outputs[0];
 }
 
 void LaunchTaskAndFeedOuputLinesToBlock(NSTask *task, NSString *description, void (^block)(NSString *))
@@ -169,7 +167,7 @@ void LaunchTaskAndFeedOuputLinesToBlock(NSTask *task, NSString *description, voi
         break;
       } else {
         NSData *line = [buffer subdataWithRange:NSMakeRange(offset, newlineRange.location - offset)];
-        block([[[NSString alloc] initWithData:line encoding:NSUTF8StringEncoding] autorelease]);
+        block([[NSString alloc] initWithData:line encoding:NSUTF8StringEncoding]);
         offset = newlineRange.location + 1;
       }
     }
@@ -245,7 +243,6 @@ void LaunchTaskAndFeedOuputLinesToBlock(NSTask *task, NSString *description, voi
   }
 
   [task waitUntilExit];
-  [buffer release];
 }
 
 NSTask *CreateTaskInSameProcessGroupWithArch(cpu_type_t arch)

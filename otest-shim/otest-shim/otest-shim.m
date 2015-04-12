@@ -70,6 +70,8 @@ static int __testSuiteDepth = 0;
 
 static BOOL __testBundleHasStartedRunning = NO;
 
+static NSString *__testScope = nil;
+
 /**
  We don't want to turn this on until our initializer runs.  Otherwise, dylibs
  that are loaded earlier (like libSystem) will call into our interposed
@@ -344,13 +346,36 @@ static void XCToolLog_testCaseDidFail(NSDictionary *exceptionInfo)
 
 static void XCPerformTestWithSuppressedExpectedAssertionFailures(id self, SEL origSel, id arg1)
 {
+  int timeout = [@(getenv("OTEST_SHIM_TEST_TIMEOUT") ?: "0") intValue];
+
   NSAssertionHandler *handler = [[XCToolAssertionHandler alloc] init];
   NSThread *currentThread = [NSThread currentThread];
   NSMutableDictionary *currentThreadDict = [currentThread threadDictionary];
   [currentThreadDict setObject:handler forKey:NSAssertionHandlerKey];
 
-  // Call through original implementation
-  objc_msgSend(self, origSel, arg1);
+  if (timeout > 0) {
+    int64_t interval = timeout * NSEC_PER_SEC;
+    NSString *queueName = [NSString stringWithFormat:@"test.timer.%p", self];
+    dispatch_queue_t queue = dispatch_queue_create([queueName cStringUsingEncoding:NSASCIIStringEncoding], DISPATCH_QUEUE_SERIAL);
+    dispatch_set_target_queue(queue, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0));
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
+    dispatch_source_set_timer(source, dispatch_time(DISPATCH_TIME_NOW, interval), 0, 0);
+    dispatch_source_set_event_handler(source, ^{
+      [NSException raise:NSInternalInconsistencyException
+                  format:@"*** Test %@ ran longer than specified test time limit: %d second(s)", self, timeout];
+    });
+    dispatch_resume(source);
+
+    // Call through original implementation
+    objc_msgSend(self, origSel, arg1);
+
+    dispatch_source_cancel(source);
+    dispatch_release(source);
+    dispatch_release(queue);
+  } else {
+    // Call through original implementation
+    objc_msgSend(self, origSel, arg1);
+  }
 
   // The assertion handler hasn't been touched for our test, so we can safely remove it.
   [currentThreadDict removeObjectForKey:NSAssertionHandlerKey];
@@ -367,6 +392,35 @@ static void XCTestCase_performTest(id self, SEL sel, id arg1)
 {
   SEL originalSelector = @selector(__XCTestCase_performTest:);
   XCPerformTestWithSuppressedExpectedAssertionFailures(self, originalSelector, arg1);
+}
+
+#pragma mark - Test Scope
+
+static NSString * SenTestProbe_testScope(Class cls, SEL cmd)
+{
+  return __testScope;
+}
+
+static void UpdateTestScope()
+{
+  static NSString * const testListFileKey = @"OTEST_TESTLIST_FILE";
+  static NSString * const testingFrameworkFilterTestArgsKeyKey = @"OTEST_FILTER_TEST_ARGS_KEY";
+
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  NSString *testListFilePath = [defaults objectForKey:testListFileKey];
+  NSString *testingFrameworkFilterTestArgsKey = [defaults objectForKey:testingFrameworkFilterTestArgsKeyKey];
+  if (!testListFilePath && !testingFrameworkFilterTestArgsKey) {
+    return;
+  }
+  NSCAssert(testListFilePath, @"Path to file with list of tests should be specified");
+  NSCAssert(testingFrameworkFilterTestArgsKey, @"Testing framework filter test args key should be specified");
+
+  NSError *readError = nil;
+  NSString *testList = [NSString stringWithContentsOfFile:testListFilePath encoding:NSUTF8StringEncoding error:&readError];
+  NSCAssert(testList, @"Couldn't read file at path %@", testListFilePath);
+  [defaults setValue:testList forKey:testingFrameworkFilterTestArgsKey];
+
+  __testScope = [testList retain];
 }
 
 #pragma mark -
@@ -547,6 +601,11 @@ static const char *DyldImageStateChangeHandler(enum dyld_image_states state,
       XTSwizzleSelectorForFunction(NSClassFromString(@"SenTestCase"),
                                    @selector(performTest:),
                                    (IMP)SenTestCase_performTest);
+      if (__testScope) {
+        XTSwizzleClassSelectorForFunction(NSClassFromString(@"SenTestProbe"),
+                                          @selector(testScope),
+                                          (IMP)SenTestProbe_testScope);
+      }
 
       NSDictionary *frameworkInfo = FrameworkInfoForExtension(@"octest");
       ApplyDuplicateTestNameFix([frameworkInfo objectForKey:kTestingFrameworkTestProbeClassName],
@@ -602,6 +661,8 @@ __attribute__((constructor)) static void EntryPoint()
     __stderr = fdopen(stderrHandle, "w");
   }
 
+  UpdateTestScope();
+
   // We need to swizzle SenTestLog (part of SenTestingKit), but the test bundle
   // which links SenTestingKit hasn't been loaded yet.  Let's register to get
   // notified when libraries are initialized and we'll watch for SenTestingKit.
@@ -614,4 +675,3 @@ __attribute__((constructor)) static void EntryPoint()
 
   __enableWriteInterception = YES;
 }
-

@@ -31,7 +31,7 @@
 
 @implementation XCTool
 
-- (id)init
+- (instancetype)init
 {
   if (self = [super init]) {
     _exitStatus = 0;
@@ -96,7 +96,7 @@
     return;
   }
 
-  Options *options = [[[Options alloc] init] autorelease];
+  Options *options = [[Options alloc] init];
   NSString *errorMessage = nil;
 
   NSFileManager *fm = [NSFileManager defaultManager];
@@ -129,7 +129,7 @@
     }
   }
 
-  [options consumeArguments:[NSMutableArray arrayWithArray:self.arguments] errorMessage:&errorMessage];
+  [options consumeArguments:[NSMutableArray arrayWithArray:_arguments] errorMessage:&errorMessage];
   if (errorMessage != nil) {
     [_standardError printString:@"ERROR: %@\n", errorMessage];
     _exitStatus = 1;
@@ -159,7 +159,6 @@
     LaunchTaskAndMaybeLogCommand(task, @"spawning xcodebuild to do -showBuildSettings");
     [task waitUntilExit];
     _exitStatus = [task terminationStatus];
-    [task release];
     return;
   }
 

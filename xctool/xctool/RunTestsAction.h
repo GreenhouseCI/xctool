@@ -34,7 +34,7 @@ NSArray *BucketizeTestCasesByTestCase(NSArray *testCases, int bucketSize);
  */
 NSArray *BucketizeTestCasesByTestClass(NSArray *testCases, int bucketSize);
 
-typedef enum {
+typedef NS_ENUM(NSInteger, BucketBy) {
   // Bucket by individual test case (the most granular option).  Test cases
   // within the same class may be broken into separate buckets.
   //
@@ -47,13 +47,9 @@ typedef enum {
   // be in the same bucket.
   BucketByClass,
 
-} BucketBy;
+} ;
 
-@interface RunTestsAction : Action {
-  int _logicTestBucketSize;
-  int _appTestBucketSize;
-  BucketBy _bucketBy;
-}
+@interface RunTestsAction : Action
 
 @property (nonatomic, assign) BOOL freshSimulator;
 @property (nonatomic, assign) BOOL resetSimulator;
@@ -63,13 +59,14 @@ typedef enum {
 @property (nonatomic, assign) BOOL listTestsOnly;
 @property (nonatomic, assign) cpu_type_t cpuType;
 @property (nonatomic, copy) NSString *testSDK;
-@property (nonatomic, retain) NSMutableArray *onlyList;
+@property (nonatomic, strong) NSMutableArray *onlyList;
 @property (nonatomic, copy) NSString *deviceName;
 @property (nonatomic, copy) NSString *OSVersion;
 
-- (void)setLogicTestBucketSize:(NSString *)str;
-- (void)setAppTestBucketSize:(NSString *)str;
-- (void)setBucketBy:(NSString *)str;
+- (void)setLogicTestBucketSizeValue:(NSString *)str;
+- (void)setAppTestBucketSizeValue:(NSString *)str;
+- (void)setBucketByValue:(NSString *)str;
+- (void)setTestTimeoutValue:(NSString *)str;
 
 @end
 

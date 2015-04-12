@@ -25,7 +25,7 @@
 #import "XCToolUtil.h"
 
 static void GetJobsIterator(const launch_data_t launch_data, const char *key, void *context) {
-  void (^block)(const launch_data_t, const char *) = context;
+  void (^block)(const launch_data_t, const char *) = (__bridge void (^)(const launch_data_t, const char *))(context);
   block(launch_data, key);
 }
 
@@ -52,10 +52,9 @@ static NSArray *GetLaunchdJobsForSimulator()
 
   launch_data_dict_iterate(response,
                            GetJobsIterator,
-                           ^(const launch_data_t launch_data, const char *keyCString)
+                           (__bridge void *)(^(const launch_data_t launch_data, const char *keyCString)
                            {
-                             NSString *key = [NSString stringWithCString:keyCString
-                                                                encoding:NSUTF8StringEncoding];
+                             NSString *key = @(keyCString);
 
                              NSArray *strings = @[@"com.apple.iphonesimulator",
                                                   @"UIKitApplication",
@@ -73,7 +72,7 @@ static NSArray *GetLaunchdJobsForSimulator()
                              if (matches) {
                                [jobs addObject:key];
                              }
-                           });
+                           }));
 
   launch_data_free(response);
   launch_data_free(getJobsMessage);

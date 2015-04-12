@@ -47,25 +47,13 @@ static const NSInteger KProductTypeIpad = 2;
 @end
 
 @implementation SimulatorInfoXcode6
-@synthesize buildSettings = _buildSettings;
-@synthesize cpuType = _cpuType;
-@synthesize deviceName = _deviceName;
-@synthesize OSVersion = _OSVersion;
-
-- (void)dealloc
-{
-  [_buildSettings release];
-  [_deviceName release];
-  [_OSVersion release];
-  [super dealloc];
-}
 
 #pragma mark -
 #pragma mark Public methods
 
 - (NSNumber *)launchTimeout
 {
-  NSString *launchTimeoutString = self.buildSettings[Xcode_LAUNCH_TIMEOUT];
+  NSString *launchTimeoutString = _buildSettings[Xcode_LAUNCH_TIMEOUT];
   if (launchTimeoutString) {
     return @(launchTimeoutString.intValue);
   }
@@ -85,11 +73,11 @@ static const NSInteger KProductTypeIpad = 2;
 
   switch ([[self simulatedDeviceFamily] integerValue]) {
     case KProductTypeIphone:
-      self.deviceName = @"iPhone 4s";
+      _deviceName = @"iPhone 4s";
       break;
 
     case KProductTypeIpad:
-      self.deviceName = @"iPad 2";
+      _deviceName = @"iPad 2";
       break;
   }
 
@@ -109,13 +97,13 @@ static const NSInteger KProductTypeIpad = 2;
   }
 
   NSAssert([supportedDeviceTypes count] > 0, @"There are no available devices that support provided sdk: %@. Supported devices: %@", [systemRoot sdkVersion], [[SimDeviceTypeStub supportedDevices] valueForKeyPath:@"name"]);
-  self.deviceName = [supportedDeviceTypes[0] name];
+  _deviceName = [supportedDeviceTypes[0] name];
   return _deviceName;
 }
 
 - (NSString *)simulatedArchitecture
 {
-  switch (self.cpuType) {
+  switch (_cpuType) {
     case CPU_TYPE_I386:
       return @"i386";
 
@@ -209,12 +197,12 @@ static const NSInteger KProductTypeIpad = 2;
 
 + (BOOL)isDeviceAvailableWithAlias:(NSString *)deviceName
 {
-  return [[SimDeviceTypeStub supportedDeviceTypesByAlias] objectForKey:deviceName] != nil;
+  return [SimDeviceTypeStub supportedDeviceTypesByAlias][deviceName] != nil;
 }
 
 + (NSString *)deviceNameForAlias:(NSString *)deviceAlias
 {
-  SimDeviceTypeStub *deviceType = [[SimDeviceTypeStub supportedDeviceTypesByAlias] objectForKey:deviceAlias];
+  SimDeviceTypeStub *deviceType = [SimDeviceTypeStub supportedDeviceTypesByAlias][deviceAlias];
   return [deviceType name];
 }
 

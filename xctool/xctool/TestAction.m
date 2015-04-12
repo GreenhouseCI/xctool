@@ -22,8 +22,8 @@
 
 @interface TestAction ()
 
-@property (nonatomic, retain) BuildTestsAction *buildTestsAction;
-@property (nonatomic, retain) RunTestsAction *runTestsAction;
+@property (nonatomic, strong) BuildTestsAction *buildTestsAction;
+@property (nonatomic, strong) RunTestsAction *runTestsAction;
 
 @end
 
@@ -94,10 +94,16 @@
                          aliases:nil
                      description:@"Skip actual test running and list them only."
                          setFlag:@selector(setListTestsOnly:)],
+    [Action actionOptionWithName:@"testTimeout"
+                         aliases:nil
+                     description:
+     @"Force individual test cases to be killed after specified timeout."
+                       paramName:@"N"
+                           mapTo:@selector(setTestTimeout:)],
     ];
 }
 
-- (id)init
+- (instancetype)init
 {
   if (self = [super init]) {
     _buildTestsAction = [[BuildTestsAction alloc] init];
@@ -106,11 +112,6 @@
   return self;
 }
 
-- (void)dealloc {
-  self.buildTestsAction = nil;
-  self.runTestsAction = nil;
-  [super dealloc];
-}
 
 - (void)setDeviceName:(NSString *)deviceName
 {
@@ -144,17 +145,17 @@
 
 - (void)setLogicTestBucketSize:(NSString *)bucketSize
 {
-  [_runTestsAction setLogicTestBucketSize:bucketSize];
+  [_runTestsAction setLogicTestBucketSizeValue:bucketSize];
 }
 
 - (void)setAppTestBucketSize:(NSString *)bucketSize
 {
-  [_runTestsAction setAppTestBucketSize:bucketSize];
+  [_runTestsAction setAppTestBucketSizeValue:bucketSize];
 }
 
 - (void)setBucketBy:(NSString *)str
 {
-  [_runTestsAction setBucketBy:str];
+  [_runTestsAction setBucketByValue:str];
 }
 
 - (void)setSkipDependencies:(BOOL)skipDependencies
@@ -172,10 +173,15 @@
   [_runTestsAction setListTestsOnly:listTestsOnly];
 }
 
+- (void)setTestTimeout:(NSString *)testTimeout
+{
+  [_runTestsAction setTestTimeoutValue:testTimeout];
+}
+
 - (void)addOnly:(NSString *)argument
 {
   // build-tests takes only a target argument, where run-tests takes Target:Class/method.
-  NSString *buildTestsOnlyArg = [[argument componentsSeparatedByString:@":"] objectAtIndex:0];
+  NSString *buildTestsOnlyArg = [argument componentsSeparatedByString:@":"][0];
   [_buildTestsAction.onlyList addObject:buildTestsOnlyArg];
   [_runTestsAction.onlyList addObject:argument];
 }

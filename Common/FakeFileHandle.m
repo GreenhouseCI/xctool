@@ -3,18 +3,12 @@
 
 @implementation FakeFileHandle
 
-- (id)init
+- (instancetype)init
 {
   if (self = [super init]) {
     _dataWritten = [[NSMutableData alloc] initWithCapacity:0];
   }
   return self;
-}
-
-- (void)dealloc
-{
-  [_dataWritten release];
-  [super dealloc];
 }
 
 - (void)writeData:(NSData *)data
@@ -29,8 +23,8 @@
 
 - (NSString *)stringWritten
 {
-  return [[[NSString alloc] initWithData:_dataWritten
-                                encoding:NSUTF8StringEncoding] autorelease];
+  return [[NSString alloc] initWithData:_dataWritten
+                                encoding:NSUTF8StringEncoding];
 }
 
 - (int)fileDescriptor {

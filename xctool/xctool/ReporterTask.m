@@ -23,6 +23,21 @@
 #import "TaskUtil.h"
 #import "XCToolUtil.h"
 
+@interface ReporterTask ()
+@property (nonatomic, copy) NSString *reporterPath;
+@property (nonatomic, copy) NSString *outputPath;
+
+@property (nonatomic, strong) NSFileHandle *standardOutput;
+@property (nonatomic, strong) NSFileHandle *standardError;
+
+@property (nonatomic, assign) BOOL outputPathIsFile;
+
+@property (nonatomic, strong) NSTask *task;
+@property (nonatomic, strong) NSPipe *pipe;
+
+@property (nonatomic, assign) BOOL wasOpened;
+@property (nonatomic, assign) BOOL wasClosed;
+@end
 
 @implementation ReporterTask
 
@@ -30,22 +45,12 @@
                           outputPath:(NSString *)outputPath
 {
   if (self = [super init]) {
-    _reporterPath = [reporterPath retain];
-    _outputPath = [outputPath retain];
+    _reporterPath = [reporterPath copy];
+    _outputPath = [outputPath copy];
   }
   return self;
 }
 
-- (void)dealloc
-{
-  [_reporterPath release];
-  [_outputPath release];
-  [_standardOutput release];
-  [_standardError release];
-  [_task release];
-  [_pipe release];
-  [super dealloc];
-}
 
 - (NSFileHandle *)_fileHandleForOutputPath:(NSString *)outputPath
                                      error:(NSString **)error
@@ -82,8 +87,8 @@
                  standardError:(NSFileHandle *)standardError
                          error:(NSString **)error
 {
-  _standardOutput = [standardOutput retain];
-  _standardError = [standardError retain];
+  _standardOutput = standardOutput;
+  _standardError = standardError;
 
   NSFileHandle *outputHandle = nil;
 
@@ -99,7 +104,7 @@
     _outputPathIsFile = YES;
   }
 
-  _pipe = [[NSPipe pipe] retain];
+  _pipe = [NSPipe pipe];
 
   // Don't generate a SIGPIPE if the we try to write() to this pipe and the
   // process has already died.
@@ -192,7 +197,6 @@
     }
   }
 
-  [buffer release];
 }
 
 @end

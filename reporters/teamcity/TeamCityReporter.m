@@ -17,19 +17,15 @@
 @implementation TeamCityReporter
 
 #pragma mark Memory Management
-- (id)init
+- (instancetype)init
 {
   if (self = [super init]) {
-    self.totalTests = 0;
-    self.testShouldRun = NO;
+    _totalTests = 0;
+    _testShouldRun = NO;
   }
   return self;
 }
 
-- (void)dealloc
-{
-  [super dealloc];
-}
 
 #pragma mark Reporter
 
@@ -102,19 +98,19 @@
 
 -(void)beginAction:(NSDictionary *)event {
   if ([event[kReporter_BeginAction_NameKey] isEqualTo:@"test"]) {
-    self.testShouldRun = YES;
+    _testShouldRun = YES;
   }
 }
 
 - (void)beginTestSuite:(NSDictionary *)event
 {
-  self.testShouldRun = YES;
+  _testShouldRun = YES;
   NSLog(@"##teamcity[testSuiteStarted name='%@']", event[kReporter_EndTestSuite_SuiteKey]);
 }
 
 - (void)beginTest:(NSDictionary *)event
 {
-  self.totalTests += 1;
+  _totalTests += 1;
   NSString *testNameWithMethodName = [NSString stringWithFormat:@"%@.%@",event[kReporter_EndTest_ClassNameKey],event[kReporter_EndTest_MethodNameKey]];
   NSLog(@"##teamcity[testStarted name='%@']",[TeamCityStatusMessageGenerator escapeCharacter:testNameWithMethodName]);
 }
@@ -148,11 +144,10 @@
 
 - (void)didFinishReporting
 {
-    
-  if (self.testShouldRun && self.totalTests == 0) {
+  if (_testShouldRun && _totalTests == 0) {
     NSLog(@"##teamcity[buildStatus status='FAILURE' text='No test in test suite executed.']");
   }
-  self.totalTests = 0;
+  _totalTests = 0;
 }
 
 @end

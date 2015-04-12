@@ -46,14 +46,13 @@ NSDictionary *FrameworkInfoForExtension(NSString *extension)
         kTestingFrameworkInvertScopeKey: @"XCTestInvertScope"
       }
     };
-    [frameworks retain];
   });
   if (![[frameworks allKeys] containsObject:extension]) {
     NSLog(@"The bundle extension '%@' is not supported. The supported extensions are: %@.",
           extension, [frameworks allKeys]);
     return nil;
   }
-  return [frameworks objectForKey:extension];
+  return frameworks[extension];
 }
 
 NSDictionary *FrameworkInfoForTestBundleAtPath (NSString *path)

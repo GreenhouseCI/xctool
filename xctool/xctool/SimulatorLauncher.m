@@ -22,8 +22,17 @@ static BOOL __didLoadAllPlatforms = NO;
 @interface DVTPlatform : NSObject
 
 + (BOOL)loadAllPlatformsReturningError:(NSError **)error;
-+ (id)platformForIdentifier:(NSString *)identifier;
++ (instancetype)platformForIdentifier:(NSString *)identifier;
 
+@end
+
+@interface SimulatorLauncher ()
+@property (nonatomic, assign) BOOL didQuit;
+@property (nonatomic, assign) BOOL didFailToStart;
+@property (nonatomic, assign) BOOL didStart;
+@property (nonatomic, strong) NSError *didEndWithError;
+@property (nonatomic, strong) DTiPhoneSimulatorSession *session;
+@property (nonatomic, strong) NSError *launchError;
 @end
 
 @implementation SimulatorLauncher
@@ -47,7 +56,7 @@ static BOOL __didLoadAllPlatforms = NO;
   }
 }
 
-- (id)initWithSessionConfig:(DTiPhoneSimulatorSessionConfig *)sessionConfig
+- (instancetype)initWithSessionConfig:(DTiPhoneSimulatorSessionConfig *)sessionConfig
                  deviceName:(NSString *)deviceName
 {
   if (self = [super init]) {
@@ -57,7 +66,7 @@ static BOOL __didLoadAllPlatforms = NO;
 
     // Set the device type if supplied
     if (deviceName) {
-      CFPreferencesSetAppValue((CFStringRef)@"SimulateDevice", (CFPropertyListRef)deviceName, (CFStringRef)@"com.apple.iphonesimulator");
+      CFPreferencesSetAppValue((CFStringRef)@"SimulateDevice", (__bridge CFPropertyListRef)deviceName, (CFStringRef)@"com.apple.iphonesimulator");
       CFPreferencesAppSynchronize((CFStringRef)@"com.apple.iphonesimulator");
     }
 
@@ -68,20 +77,11 @@ static BOOL __didLoadAllPlatforms = NO;
   return self;
 }
 
-- (void)dealloc
-{
-  [_session release];
-  [_launchError release];
-  [_didEndWithError release];
-  [_launchTimeout release];
-  [super dealloc];
-}
-
 - (BOOL)launchAndWaitForExit
 {
   NSError *error = nil;
-  if (![_session requestStartWithConfig:[_session sessionConfig] timeout:self.launchTimeout.intValue error:&error]) {
-    self.launchError = error;
+  if (![_session requestStartWithConfig:[_session sessionConfig] timeout:[_launchTimeout intValue] error:&error]) {
+    _launchError = error;
     return NO;
   }
 
@@ -95,8 +95,8 @@ static BOOL __didLoadAllPlatforms = NO;
 - (BOOL)launchAndWaitForStart
 {
   NSError *error = nil;
-  if (![_session requestStartWithConfig:[_session sessionConfig] timeout:self.launchTimeout.intValue error:&error]) {
-    self.launchError = error;
+  if (![_session requestStartWithConfig:[_session sessionConfig] timeout:[_launchTimeout intValue] error:&error]) {
+    _launchError = error;
     return NO;
   }
 
@@ -110,7 +110,7 @@ static BOOL __didLoadAllPlatforms = NO;
 - (void)session:(DTiPhoneSimulatorSession *)session didEndWithError:(NSError *)error
 {
   if (error) {
-    _didEndWithError = [error retain];
+    _didEndWithError = error;
   }
   _didQuit = YES;
 
@@ -122,7 +122,7 @@ static BOOL __didLoadAllPlatforms = NO;
   if (started) {
     _didStart = YES;
   } else {
-    self.launchError = error;
+    _launchError = error;
     _didFailToStart = YES;
   }
 

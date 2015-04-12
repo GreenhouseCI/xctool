@@ -2,11 +2,9 @@
 #import <Foundation/Foundation.h>
 
 @interface FakeFileHandle : NSObject
-{
-  NSMutableData *_dataWritten;
-}
 
-- (NSData *)dataWritten;
+@property (nonatomic, strong) NSMutableData *dataWritten;
+
 - (NSString *)stringWritten;
 - (int)fileDescriptor;
 - (void)synchronizeFile;

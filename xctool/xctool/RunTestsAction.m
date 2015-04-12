@@ -88,6 +88,13 @@ NSArray *BucketizeTestCasesByTestClass(NSArray *testCases, int bucketSize)
   return result;
 }
 
+@interface RunTestsAction ()
+@property (nonatomic, assign) int logicTestBucketSize;
+@property (nonatomic, assign) int appTestBucketSize;
+@property (nonatomic, assign) BucketBy bucketBy;
+@property (nonatomic, assign) int testTimeout;
+@end
+
 @implementation RunTestsAction
 
 + (NSString *)name
@@ -132,17 +139,17 @@ NSArray *BucketizeTestCasesByTestClass(NSArray *testCases, int bucketSize)
                          aliases:nil
                      description:@"Break logic test bundles in buckets of N test cases."
                        paramName:@"N"
-                           mapTo:@selector(setLogicTestBucketSize:)],
+                           mapTo:@selector(setLogicTestBucketSizeValue:)],
     [Action actionOptionWithName:@"appTestBucketSize"
                          aliases:nil
                      description:@"Break app test bundles in buckets of N test cases."
                        paramName:@"N"
-                           mapTo:@selector(setAppTestBucketSize:)],
+                           mapTo:@selector(setAppTestBucketSizeValue:)],
     [Action actionOptionWithName:@"bucketBy"
                          aliases:nil
                      description:@"Either 'case' (default) or 'class'."
                        paramName:@"BUCKETBY"
-                           mapTo:@selector(setBucketBy:)],
+                           mapTo:@selector(setBucketByValue:)],
     [Action actionOptionWithName:@"failOnEmptyTestBundles"
                          aliases:nil
                      description:@"Fail when an empty test bundle was run."
@@ -151,43 +158,45 @@ NSArray *BucketizeTestCasesByTestClass(NSArray *testCases, int bucketSize)
                          aliases:nil
                      description:@"Skip actual test running and list them only."
                          setFlag:@selector(setListTestsOnly:)],
+    [Action actionOptionWithName:@"testTimeout"
+                         aliases:nil
+                     description:
+     @"Force individual test cases to be killed after specified timeout."
+                       paramName:@"N"
+                           mapTo:@selector(setTestTimeout:)],
     ];
 }
 
-- (id)init
+- (instancetype)init
 {
   if (self = [super init]) {
-    self.onlyList = [NSMutableArray array];
+    _onlyList = [[NSMutableArray alloc] init];
     _logicTestBucketSize = 0;
     _appTestBucketSize = 0;
     _bucketBy = BucketByTestCase;
+    _testTimeout = 0;
     _cpuType = CPU_TYPE_ANY;
   }
   return self;
 }
 
-- (void)dealloc {
-  self.onlyList = nil;
-  self.testSDK = nil;
-  [super dealloc];
-}
 
 - (void)addOnly:(NSString *)argument
 {
-  [self.onlyList addObject:argument];
+  [_onlyList addObject:argument];
 }
 
-- (void)setLogicTestBucketSize:(NSString *)str
+- (void)setLogicTestBucketSizeValue:(NSString *)str
 {
   _logicTestBucketSize = [str intValue];
 }
 
-- (void)setAppTestBucketSize:(NSString *)str
+- (void)setAppTestBucketSizeValue:(NSString *)str
 {
   _appTestBucketSize = [str intValue];
 }
 
-- (void)setBucketBy:(NSString *)str
+- (void)setBucketByValue:(NSString *)str
 {
   if ([str isEqualToString:@"class"]) {
     _bucketBy = BucketByClass;
@@ -196,11 +205,16 @@ NSArray *BucketizeTestCasesByTestClass(NSArray *testCases, int bucketSize)
   }
 }
 
+- (void)setTestTimeoutValue:(NSString *)str
+{
+  _testTimeout = [str intValue];
+}
+
 - (NSArray *)onlyListAsTargetsAndSenTestList
 {
   NSMutableArray *results = [NSMutableArray array];
 
-  for (NSString *only in self.onlyList) {
+  for (NSString *only in _onlyList) {
     NSRange colonRange = [only rangeOfString:@":"];
     NSString *target = nil;
     NSString *senTestList = nil;
@@ -269,7 +283,7 @@ NSArray *BucketizeTestCasesByTestClass(NSArray *testCases, int bucketSize)
 {
   NSArray *testables = nil;
 
-  if (self.onlyList.count == 0) {
+  if (_onlyList.count == 0) {
     // Use whatever we found in the scheme, except for skipped tests.
     NSMutableArray *unskipped = [NSMutableArray array];
     for (Testable *testable in xcodeSubjectInfo.testables) {
@@ -285,7 +299,7 @@ NSArray *BucketizeTestCasesByTestClass(NSArray *testCases, int bucketSize)
       Testable *matchingTestable = [xcodeSubjectInfo testableWithTarget:only[@"target"]];
 
       if (matchingTestable) {
-        Testable *newTestable = [[matchingTestable copy] autorelease];
+        Testable *newTestable = [matchingTestable copy];
 
         if (only[@"senTestList"] != [NSNull null]) {
           newTestable.senTestList = only[@"senTestList"];
@@ -386,7 +400,7 @@ typedef BOOL (^TestableBlock)(NSArray *reporters);
               forTestableExecutionInfo:(TestableExecutionInfo *)testableExecutionInfo
                              succeeded:(BOOL)succeeded
 {
-  return [[^(NSArray *reporters){
+  return [^(NSArray *reporters){
     PublishEventToReporters(reporters,
                             [[self class] eventForBeginOCUnitFromTestableExecutionInfo:testableExecutionInfo action:self]);
 
@@ -396,7 +410,7 @@ typedef BOOL (^TestableBlock)(NSArray *reporters);
                                                                            succeeded:succeeded
                                                                        failureReason:error]);
     return succeeded;
-  } copy] autorelease];
+  } copy];
 }
 
 - (TestableBlock)blockForTestable:(Testable *)testable
@@ -409,17 +423,18 @@ typedef BOOL (^TestableBlock)(NSArray *reporters);
                       environment:(NSDictionary *)environment
                   testRunnerClass:(Class)testRunnerClass
 {
-  return [[^(NSArray *reporters) {
-    OCUnitTestRunner *testRunner = [[[testRunnerClass alloc]
+  return [^(NSArray *reporters) {
+    OCUnitTestRunner *testRunner = [[testRunnerClass alloc]
                                      initWithBuildSettings:testableExecutionInfo.buildSettings
                                      focusedTestCases:focusedTestCases
                                      allTestCases:allTestCases
                                      arguments:arguments
                                      environment:environment
-                                     freshSimulator:self.freshSimulator
-                                     resetSimulator:self.resetSimulator
-                                     freshInstall:self.freshInstall
-                                     reporters:reporters] autorelease];
+                                     freshSimulator:_freshSimulator
+                                     resetSimulator:_resetSimulator
+                                     freshInstall:_freshInstall
+                                     testTimeout:_testTimeout
+                                     reporters:reporters];
     [testRunner setCpuType:_cpuType];
 
     if ([testRunner isKindOfClass:[OCUnitIOSAppTestRunner class]]) {
@@ -448,7 +463,7 @@ typedef BOOL (^TestableBlock)(NSArray *reporters);
                                                                        failureReason:nil]);
 
     return succeeded;
-  } copy] autorelease];
+  } copy];
 }
 
 - (BOOL)runTestables:(NSArray *)testables
@@ -456,8 +471,8 @@ typedef BOOL (^TestableBlock)(NSArray *reporters);
     xcodeSubjectInfo:(XcodeSubjectInfo *)xcodeSubjectInfo
 {
   dispatch_queue_t q = dispatch_queue_create("xctool.runtests",
-                                             self.parallelize ? DISPATCH_QUEUE_CONCURRENT
-                                                              : DISPATCH_QUEUE_SERIAL);
+                                             _parallelize ? DISPATCH_QUEUE_CONCURRENT
+                                                          : DISPATCH_QUEUE_SERIAL);
   dispatch_group_t group = dispatch_group_create();
 
   // Limits the number of simultaneously existing threads.
@@ -534,7 +549,7 @@ typedef BOOL (^TestableBlock)(NSArray *reporters);
     } else if (_bucketBy == BucketByTestCase) {
       testChunks = BucketizeTestCasesByTestCase(testCases, bucketSize > 0 ? bucketSize : INT_MAX);
     } else {
-      NSAssert(NO, @"Unexpected value for _bucketBy: %d", _bucketBy);
+      NSAssert(NO, @"Unexpected value for _bucketBy: %ld", _bucketBy);
       abort();
     }
 
@@ -591,7 +606,7 @@ typedef BOOL (^TestableBlock)(NSArray *reporters);
   }
 
   __block BOOL succeeded = YES;
-  __block NSMutableArray *bundlesInProgress = [NSMutableArray array];
+  __weak NSMutableArray *bundlesInProgress = [NSMutableArray array];
 
   void (^runTestableBlockAndSaveSuccess)(TestableBlock, NSString *) = ^(TestableBlock block, NSString *blockAnnotation) {
     NSArray *reporters;

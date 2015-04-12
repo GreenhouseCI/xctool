@@ -51,7 +51,7 @@ int main(int argc, const char * argv[])
       NSString *fallbackFrameworkPath;
 
       if (getenv(dyldFallbackFrameworkPathKey)) {
-        fallbackFrameworkPath = [NSString stringWithUTF8String:getenv(dyldFallbackFrameworkPathKey)];
+        fallbackFrameworkPath = @(getenv(dyldFallbackFrameworkPathKey));
       } else {
         // If unset, this variable takes on an implicit default (see `man dyld`).
         fallbackFrameworkPath = @"/Library/Frameworks:/Network/Library/Frameworks:/System/Library/Frameworks";
@@ -76,7 +76,7 @@ int main(int argc, const char * argv[])
 
     NSArray *arguments = [[NSProcessInfo processInfo] arguments];
 
-    XCTool *tool = [[[XCTool alloc] init] autorelease];
+    XCTool *tool = [[XCTool alloc] init];
     tool.arguments = [arguments subarrayWithRange:NSMakeRange(1, arguments.count - 1)];
     tool.standardOutput = [NSFileHandle fileHandleWithStandardOutput];
     tool.standardError = [NSFileHandle fileHandleWithStandardError];

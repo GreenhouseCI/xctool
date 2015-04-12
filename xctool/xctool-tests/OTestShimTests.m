@@ -43,8 +43,8 @@ static NSArray *AllTestCasesInTestBundle(NSString *sdkName,
                                   Xcode_FULL_PRODUCT_NAME : fullProductName,
                                   Xcode_SDK_NAME : latestSDK,
                                   };
-  OCUnitTestQueryRunner *runner = [[[testQueryClass alloc] initWithBuildSettings:buildSettings
-                                                                     withCpuType:CPU_TYPE_ANY] autorelease];
+  OCUnitTestQueryRunner *runner = [[testQueryClass alloc] initWithBuildSettings:buildSettings
+                                                                     withCpuType:CPU_TYPE_ANY];
   NSArray *allTests = [runner runQueryWithError:&error];
   NSCAssert(error == nil, @"Error while querying test cases: %@", error);
 
@@ -90,7 +90,7 @@ static NSTask *OtestShimTask(NSString *platformName,
   // so we can be sure it points to a valid directory based off the true Xcode
   // install location.
 
-  NSDictionary *latestSDKInfo = [GetAvailableSDKsInfo() objectForKey:[platformName lowercaseString]];
+  NSDictionary *latestSDKInfo = GetAvailableSDKsInfo()[[platformName lowercaseString]];
   NSString *platformNameWithVersion = [platformName stringByAppendingString:latestSDKInfo[@"SDKVersion"]];
 
   targetSettings[Xcode_SDKROOT] = [NSString stringWithFormat:@"%@/Platforms/%@.platform/Developer/SDKs/%@.sdk",
@@ -100,7 +100,7 @@ static NSTask *OtestShimTask(NSString *platformName,
 
   // Regardless of whatever is in the build settings, let's pretend and use
   // the latest available SDK.
-  targetSettings[Xcode_SDK_NAME] = [GetAvailableSDKsAndAliases() objectForKey:[platformName lowercaseString]];
+  targetSettings[Xcode_SDK_NAME] = GetAvailableSDKsAndAliases()[[platformName lowercaseString]];
 
   // set up an OCUnitIOSLogicTestRunner
   OCUnitIOSLogicTestRunner *runner = [[testRunnerClass alloc] initWithBuildSettings:targetSettings
@@ -111,10 +111,10 @@ static NSTask *OtestShimTask(NSString *platformName,
                                                                      freshSimulator:NO
                                                                      resetSimulator:NO
                                                                        freshInstall:NO
+                                                                        testTimeout:1
                                                                           reporters:@[]];
 
   NSTask *task = [runner otestTaskWithTestBundle: bundlePath];
-  [runner release];
 
   // Make sure launch path is accessible.
   NSString *launchPath = [task launchPath];
@@ -352,6 +352,40 @@ static NSDictionary *ExtractEvent(NSArray *events, NSString *eventType)
                       componentsJoinedByString:@""];
 
   assertThat(output, containsString(@"Terminating app due to uncaught exception"));
+}
+
+- (void)testSenTestingKitExceptionIsThrownWhenTestTimeoutIsHit
+{
+  NSString *bundlePath = TEST_DATA @"tests-ios-test-bundle/TestProject-LibraryTests.octest";
+  NSString *targetName = @"TestProject-LibraryTests";
+  NSString *settingsPath = TEST_DATA @"TestProject-Library-TestProject-LibraryTests-showBuildSettings.txt";
+  NSArray *testList = @[ @"SomeTests/testTimeout" ];
+
+  NSArray *allTests = AllTestCasesInTestBundleIOS(bundlePath);
+  NSTask *task = OtestShimTaskIOS(settingsPath, targetName, bundlePath, testList, allTests);
+  NSArray *events = RunOtestAndParseResult(task);
+
+  NSDictionary *testOutputEvent = ExtractEvent(events, kReporter_Events_TestOuput);
+  assertThat(testOutputEvent, hasKey(@"output"));
+  NSString *testOutput = testOutputEvent[@"output"];
+  assertThat(testOutput, containsString(@"Test -[SomeTests testTimeout] ran longer than specified test time limit: 1 second(s)"));
+}
+
+- (void)testXCTestExceptionIsThrownWhenTestTimeoutIsHit
+{
+  NSString *bundlePath = TEST_DATA @"tests-ios-test-bundle/TestProject-Library-XCTest-iOSTests.xctest";
+  NSString *targetName = @"TestProject-Library-XCTest-iOSTests";
+  NSString *settingsPath = TEST_DATA @"TestProject-Library-XCTest-iOS-TestProject-Library-XCTest-iOSTests-showBuildSettings-iphoneos.txt";
+  NSArray *testList = @[ @"SomeTests/testTimeout" ];
+
+  NSArray *allTests = AllTestCasesInTestBundleIOS(bundlePath);
+  NSTask *task = OtestShimTaskIOS(settingsPath, targetName, bundlePath, testList, allTests);
+  NSArray *events = RunOtestAndParseResult(task);
+
+  NSDictionary *testOutputEvent = ExtractEvent(events, kReporter_Events_TestOuput);
+  assertThat(testOutputEvent, hasKey(@"output"));
+  NSString *testOutput = testOutputEvent[@"output"];
+  assertThat(testOutput, containsString(@"Test -[SomeTests testTimeout] ran longer than specified test time limit: 1 second(s)"));
 }
 
 @end

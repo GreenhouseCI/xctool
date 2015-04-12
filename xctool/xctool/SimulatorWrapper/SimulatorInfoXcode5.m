@@ -27,10 +27,6 @@ static const NSInteger KProductTypeIphone = 1;
 static const NSInteger KProductTypeIpad = 2;
 
 @implementation SimulatorInfoXcode5
-@synthesize buildSettings = _buildSettings;
-@synthesize cpuType = _cpuType;
-@synthesize deviceName = _deviceName;
-@synthesize OSVersion = _OSVersion;
 
 #pragma mark -
 #pragma mark Private methods
@@ -74,17 +70,9 @@ static const NSInteger KProductTypeIpad = 2;
   } while (true);
   
   // set device name in case if it was changed
-  self.deviceName = [deviceInfo displayName];
+  _deviceName = [deviceInfo displayName];
   
   return [maxSdk shortVersionString];
-}
-
-- (void)dealloc
-{
-  [_buildSettings release];
-  [_deviceName release];
-  [_OSVersion release];
-  [super dealloc];
 }
 
 #pragma mark -
@@ -92,7 +80,7 @@ static const NSInteger KProductTypeIpad = 2;
 
 - (NSNumber *)launchTimeout
 {
-  NSString *launchTimeoutString = self.buildSettings[Xcode_LAUNCH_TIMEOUT];
+  NSString *launchTimeoutString = _buildSettings[Xcode_LAUNCH_TIMEOUT];
   if (launchTimeoutString) {
     return @(launchTimeoutString.intValue);
   }
@@ -112,11 +100,11 @@ static const NSInteger KProductTypeIpad = 2;
 
   switch ([[self simulatedDeviceFamily] integerValue]) {
     case KProductTypeIphone:
-      self.deviceName = @"iPhone";
+      _deviceName = @"iPhone";
       break;
 
     case KProductTypeIpad:
-      self.deviceName = @"iPad";
+      _deviceName = @"iPad";
       break;
   }
 
@@ -129,7 +117,7 @@ static const NSInteger KProductTypeIpad = 2;
   ISHDeviceInfoStub *deviceInfo = [versions deviceInfoNamed:_deviceName];
   while (deviceInfo && ![deviceInfo supportsSDK:sdkInfo]) {
     deviceInfo = [deviceInfo newerEquivalent];
-    self.deviceName = [deviceInfo displayName];
+    _deviceName = [deviceInfo displayName];
   }
 
   return _deviceName;
@@ -137,7 +125,7 @@ static const NSInteger KProductTypeIpad = 2;
 
 - (NSString *)simulatedArchitecture
 {
-  switch (self.cpuType) {
+  switch (_cpuType) {
     case CPU_TYPE_I386:
       return @"i386";
 

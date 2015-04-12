@@ -27,7 +27,7 @@
 
 @interface BuildTargetsCollector : NSObject <EventSink>
 /// Array of @{@"projectName": projectName, @"targetName": targetName}
-@property (nonatomic, retain) NSMutableSet *seenTargets;
+@property (nonatomic, strong) NSMutableSet *seenTargets;
 @end
 
 @implementation BuildTargetsCollector
@@ -35,10 +35,11 @@
 - (instancetype)init
 {
   if (self = [super init]) {
-    self.seenTargets = [NSMutableSet set];
+    _seenTargets = [[NSMutableSet alloc] init];
   }
   return self;
 }
+
 
 - (void)publishDataForEvent:(NSData *)data
 {
@@ -49,7 +50,7 @@
   NSAssert(event != nil, @"Error decoding JSON: %@", [error localizedFailureReason]);
 
   if ([event[@"event"] isEqualTo:kReporter_Events_BeginBuildTarget]) {
-    [self.seenTargets addObject:@{
+    [_seenTargets addObject:@{
      @"projectName": event[kReporter_BeginBuildTarget_ProjectKey],
      @"targetName": event[kReporter_BeginBuildTarget_TargetKey],
      }];
@@ -59,7 +60,7 @@
 @end
 
 @interface AnalyzeAction ()
-@property (nonatomic, retain) NSMutableSet *onlySet;
+@property (nonatomic, strong) NSMutableSet *onlySet;
 @property (nonatomic, assign) BOOL skipDependencies;
 @property (nonatomic, assign) BOOL failOnWarnings;
 @end
@@ -158,7 +159,7 @@
   BOOL buildPathExists = [[NSFileManager defaultManager] fileExistsAtPath:buildStatePath];
 
   if (buildPathExists) {
-    BuildStateParser *buildState = [[[BuildStateParser alloc] initWithPath:buildStatePath] autorelease];
+    BuildStateParser *buildState = [[BuildStateParser alloc] initWithPath:buildStatePath];
     for (NSString *path in buildState.nodes) {
       NSTextCheckingResult *result = [analyzerPlistPathRegex
                                       firstMatchInString:path
@@ -233,13 +234,14 @@
   }
 }
 
-- (id)init
+- (instancetype)init
 {
   if (self = [super init]) {
-    self.onlySet = [NSMutableSet set];
+    _onlySet = [[NSMutableSet alloc] init];
   }
   return self;
 }
+
 
 - (void)addOnlyOption:(NSString *)targetName
 {
@@ -250,7 +252,7 @@
                 xcodeSubjectInfo:(XcodeSubjectInfo *)xcodeSubjectInfo
 {
 
-  BuildTargetsCollector *buildTargetsCollector = [[[BuildTargetsCollector alloc] init] autorelease];
+  BuildTargetsCollector *buildTargetsCollector = [[BuildTargetsCollector alloc] init];
   NSArray *reporters = [options.reporters arrayByAddingObject:buildTargetsCollector];
 
   NSArray *buildArgs = [[options xcodeBuildArgumentsForSubject]
@@ -260,7 +262,7 @@
 
   BOOL success = YES;
   if (_onlySet.count) {
-    if (!self.skipDependencies) {
+    if (!_skipDependencies) {
       // build everything, and then build with analyze only the specified buildables
       NSArray *args = [buildArgs arrayByAddingObject:@"build"];
       success = RunXcodebuildAndFeedEventsToReporters(args, @"build", [options scheme], reporters);
@@ -313,7 +315,7 @@
     haveFoundWarnings |= foundWarningsInBuildable;
   }
 
-  if (self.failOnWarnings) {
+  if (_failOnWarnings) {
     return !haveFoundWarnings;
   } else {
     return YES;

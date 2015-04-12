@@ -20,12 +20,8 @@
 #import "ReporterEvents.h"
 
 @interface OCTestSuiteEventState ()
-{
-  double _totalDuration;
-}
-
-@property (nonatomic, retain) NSDictionary *beginTestSuiteInfo;
-
+@property (nonatomic, assign) double totalDuration;
+@property (nonatomic, strong) NSDictionary *beginTestSuiteInfo;
 @end
 
 @implementation OCTestSuiteEventState
@@ -46,19 +42,12 @@
   return self;
 }
 
-- (void)dealloc
-{
-  [_testName release];
-  [_tests release];
-  [_beginTestSuiteInfo release];
-  [super dealloc];
-}
 
 - (void)beginTestSuite:(NSDictionary *)event
 {
   NSAssert(!_isStarted, @"Test should not have started yet.");
   _isStarted = true;
-  self.beginTestSuiteInfo = event;
+  _beginTestSuiteInfo = event;
 
   [self publishWithEvent:event];
 }
@@ -70,7 +59,7 @@
 
   _totalDuration = [event[kReporter_TimestampKey] doubleValue] - [_beginTestSuiteInfo[kReporter_TimestampKey] doubleValue];
 
-  NSMutableDictionary *finalEvent = [[event mutableCopy] autorelease];
+  NSMutableDictionary *finalEvent = [event mutableCopy];
   finalEvent[kReporter_EndTestSuite_TestCaseCountKey] = @([self testCount]);
   finalEvent[kReporter_EndTestSuite_TotalFailureCountKey] = @([self totalFailures]);
   finalEvent[kReporter_EndTestSuite_UnexpectedExceptionCountKey] = @([self totalErrors]);
@@ -84,7 +73,7 @@
   if (!_isStarted) {
     NSDictionary *event =
       EventDictionaryWithNameAndContent(kReporter_Events_BeginTestSuite,
-        @{kReporter_BeginTestSuite_SuiteKey:self.testName});
+        @{kReporter_BeginTestSuite_SuiteKey:_testName});
     [self beginTestSuite:event];
   }
 
@@ -93,7 +82,7 @@
   if (!_isFinished && [[self unstartedTests] count] == 0) {
     NSDictionary *event =
       EventDictionaryWithNameAndContent(kReporter_Events_EndTestSuite, @{
-        kReporter_EndTestSuite_SuiteKey:self.testName,
+        kReporter_EndTestSuite_SuiteKey:_testName,
         kReporter_EndTestSuite_TestCaseCountKey:@([self testCount]),
         kReporter_EndTestSuite_TotalFailureCountKey:@([self totalFailures]),
         kReporter_EndTestSuite_UnexpectedExceptionCountKey:@([self totalErrors]),
@@ -109,16 +98,16 @@
   if (!_isStarted) {
     NSDictionary *event =
       EventDictionaryWithNameAndContent(kReporter_Events_BeginTestSuite,
-        @{kReporter_BeginTestSuite_SuiteKey:self.testName});
+        @{kReporter_BeginTestSuite_SuiteKey:_testName});
     [self beginTestSuite:event];
   }
 
-  [[self tests] makeObjectsPerformSelector:@selector(publishEvents)];
+  [_tests makeObjectsPerformSelector:@selector(publishEvents)];
 
   if (!_isFinished) {
     NSDictionary *event =
       EventDictionaryWithNameAndContent(kReporter_Events_EndTestSuite, @{
-        kReporter_EndTestSuite_SuiteKey:self.testName,
+        kReporter_EndTestSuite_SuiteKey:_testName,
         kReporter_EndTestSuite_TestCaseCountKey:@([self testCount]),
         kReporter_EndTestSuite_TotalFailureCountKey:@([self totalFailures]),
         kReporter_EndTestSuite_UnexpectedExceptionCountKey:@([self totalErrors]),
@@ -155,7 +144,6 @@
   [tests enumerateObjectsUsingBlock:^(NSString *testDesc, NSUInteger idx, BOOL *stop) {
     OCTestEventState *state = [[OCTestEventState alloc] initWithInputName:testDesc];
     [self addTest:state];
-    [state release];
   }];
 }
 

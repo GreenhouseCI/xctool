@@ -21,7 +21,7 @@
 @interface FakeAction : Action
 @property (nonatomic, assign) BOOL showHelp;
 @property (nonatomic, copy) NSString *name;
-@property (nonatomic, retain) NSMutableArray *numbers;
+@property (nonatomic, strong) NSMutableArray *numbers;
 @end
 
 @implementation FakeAction
@@ -39,17 +39,17 @@
            ];
 }
 
-- (id)init
+- (instancetype)init
 {
   if (self = [super init]) {
-    self.numbers = [NSMutableArray array];
+    _numbers = [[NSMutableArray alloc] init];
   }
   return self;
 }
 
 - (void)addNumber:(NSString *)number
 {
-  [self.numbers addObject:@([number intValue])];
+  [_numbers addObject:@([number intValue])];
 }
 
 @end
@@ -72,7 +72,7 @@
   NSMutableArray *arguments = [NSMutableArray arrayWithArray:@[
                                @"-help",
                                ]];
-  FakeAction *action = [[[FakeAction alloc] init] autorelease];
+  FakeAction *action = [[FakeAction alloc] init];
   assertThatBool(action.showHelp, equalToBool(NO));
 
   NSString *errorMessage = nil;
@@ -89,7 +89,7 @@
   NSMutableArray *arguments = [NSMutableArray arrayWithArray:@[
                                @"-h",
                                ]];
-  FakeAction *action = [[[FakeAction alloc] init] autorelease];
+  FakeAction *action = [[FakeAction alloc] init];
   assertThatBool(action.showHelp, equalToBool(NO));
 
   NSString *errorMessage = nil;
@@ -106,7 +106,7 @@
   NSMutableArray *arguments = [NSMutableArray arrayWithArray:@[
                                @"-name", @"SomeName",
                                ]];
-  FakeAction *action = [[[FakeAction alloc] init] autorelease];
+  FakeAction *action = [[FakeAction alloc] init];
 
   NSString *errorMessage = nil;
   NSUInteger consumed = [action consumeArguments:arguments errorMessage:&errorMessage];
@@ -122,7 +122,7 @@
   NSMutableArray *arguments = [NSMutableArray arrayWithArray:@[
                                @"1", @"2",
                                ]];
-  FakeAction *action = [[[FakeAction alloc] init] autorelease];
+  FakeAction *action = [[FakeAction alloc] init];
 
   NSString *errorMessage = nil;
   NSUInteger consumed = [action consumeArguments:arguments errorMessage:&errorMessage];

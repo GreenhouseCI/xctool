@@ -20,7 +20,7 @@
 #import "TestingFramework.h"
 
 @interface OCUnitTestRunner : NSObject {
-@public
+@protected
   NSDictionary *_buildSettings;
   NSArray *_focusedTestCases;
   NSArray *_allTestCases;
@@ -31,12 +31,13 @@
   BOOL _freshSimulator;
   BOOL _resetSimulator;
   BOOL _freshInstall;
+  NSInteger _testTimeout;
   NSArray *_reporters;
   NSDictionary *_framework;
 }
 
 @property (nonatomic, assign) cpu_type_t cpuType;
-@property (nonatomic, readonly) NSArray *reporters;
+@property (nonatomic, copy, readonly) NSArray *reporters;
 
 /**
  * Filters a list of test class names to only those that match the
@@ -50,7 +51,7 @@
              withSenTestList:(NSString *)senTestList
           senTestInvertScope:(BOOL)senTestInvertScope;
 
-- (id)initWithBuildSettings:(NSDictionary *)buildSettings
+- (instancetype)initWithBuildSettings:(NSDictionary *)buildSettings
            focusedTestCases:(NSArray *)focusedTestCases
                allTestCases:(NSArray *)allTestCases
                   arguments:(NSArray *)arguments
@@ -58,6 +59,7 @@
              freshSimulator:(BOOL)freshSimulator
              resetSimulator:(BOOL)resetSimulator
                freshInstall:(BOOL)freshInstall
+                testTimeout:(NSInteger)testTimeout
                   reporters:(NSArray *)reporters;
 
 - (BOOL)runTests;

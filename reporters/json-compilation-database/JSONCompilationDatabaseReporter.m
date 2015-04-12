@@ -1,3 +1,19 @@
+//
+// Copyright 2013 Facebook
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
 #import "JSONCompilationDatabaseReporter.h"
 
 #import "ReporterEvents.h"
@@ -35,26 +51,25 @@
 
 @end
 
+@interface JSONCompilationDatabaseReporter ()
+@property (nonatomic, copy) NSMutableArray *compiles;
+@property (nonatomic, copy) NSDictionary *currentBuildCommand;
+@property (nonatomic, copy) NSMutableArray *precompiles;
+@end
 
 @implementation JSONCompilationDatabaseReporter
 
-- (id)init
+- (instancetype)init
 {
   self = [super init];
   if (self) {
     _compiles = [[NSMutableArray alloc] init];
-    _precompiles = [[NSMutableArray alloc] init];
     _currentBuildCommand = nil;
+    _precompiles = [[NSMutableArray alloc] init];
   }
   return self;
 }
 
-- (void)dealloc
-{
-  [_precompiles release];
-  [_compiles release];
-  [super dealloc];
-}
 
 - (void)collectEvent:(NSDictionary *)event
 {
@@ -69,7 +84,7 @@
 
 - (void)beginBuildCommand:(NSDictionary *)event
 {
-  _currentBuildCommand = [event retain];
+  _currentBuildCommand = event;
 }
 
 - (void)endBuildCommand:(NSDictionary *)event
@@ -79,7 +94,6 @@
     [self collectEvent:_currentBuildCommand];
   }
 
-  [_currentBuildCommand release];
   _currentBuildCommand = nil;
 }
 
@@ -103,8 +117,6 @@
   [_outputHandle writeData:data];
   [_outputHandle writeData:[@"\n" dataUsingEncoding:NSUTF8StringEncoding]];
 
-  [compilationDatabase release];
-  compilationDatabase = nil;
 }
 
 - (NSDictionary *)convertCompileDictionary:(NSDictionary *)event withPrecompilesLocalMapping:(NSDictionary *)precompilesMapping
@@ -133,7 +145,7 @@
   NSTextCheckingResult *pchMatch = [rawCompilerCommand firstMatch:@[@"-include \"(.+?\\.pch)\"", @"-include (.+?\\.pch)"]];
 
   if (sourceFileMatch && workingDirectoryMatch) {
-    NSMutableDictionary *compile = [[[NSMutableDictionary alloc] init] autorelease];
+    NSMutableDictionary *compile = [[NSMutableDictionary alloc] init];
     compile[@"file"] = [rawCompilerCommand substringWithRange:[sourceFileMatch rangeAtIndex:1]];
     compile[@"directory"] = [rawWorkingDirectory substringWithRange:[workingDirectoryMatch rangeAtIndex:1]];
     NSString *convertedCompilerCommand = nil;
@@ -183,7 +195,7 @@
     }
 
   }
-  return [localMapping autorelease];
+  return localMapping;
 }
 
 @end

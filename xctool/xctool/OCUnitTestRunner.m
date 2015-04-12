@@ -24,6 +24,20 @@
 #import "XCToolUtil.h"
 #import "XcodeBuildSettings.h"
 
+@interface OCUnitTestRunner ()
+@property (nonatomic, copy) NSDictionary *buildSettings;
+@property (nonatomic, copy) NSArray *focusedTestCases;
+@property (nonatomic, copy) NSArray *allTestCases;
+@property (nonatomic, copy) NSArray *arguments;
+@property (nonatomic, copy) NSDictionary *environment;
+@property (nonatomic, assign) BOOL garbageCollection;
+@property (nonatomic, assign) BOOL freshSimulator;
+@property (nonatomic, assign) BOOL resetSimulator;
+@property (nonatomic, assign) BOOL freshInstall;
+@property (nonatomic, copy, readwrite) NSArray *reporters;
+@property (nonatomic, copy) NSDictionary *framework;
+@end
+
 @implementation OCUnitTestRunner
 
 + (NSArray *)filterTestCases:(NSArray *)testCases
@@ -64,7 +78,7 @@
   if (!senTestInvertScope) {
     [result addObjectsFromArray:[matchingSet allObjects]];
   } else {
-    NSMutableSet *invertedSet = [[originalSet mutableCopy] autorelease];
+    NSMutableSet *invertedSet = [originalSet mutableCopy];
     [invertedSet minusSet:matchingSet];
     [result addObjectsFromArray:[invertedSet allObjects]];
   }
@@ -73,7 +87,7 @@
   return result;
 }
 
-- (id)initWithBuildSettings:(NSDictionary *)buildSettings
+- (instancetype)initWithBuildSettings:(NSDictionary *)buildSettings
            focusedTestCases:(NSArray *)focusedTestCases
                allTestCases:(NSArray *)allTestCases
                   arguments:(NSArray *)arguments
@@ -81,35 +95,26 @@
              freshSimulator:(BOOL)freshSimulator
              resetSimulator:(BOOL)resetSimulator
                freshInstall:(BOOL)freshInstall
+                testTimeout:(NSInteger)testTimeout
                   reporters:(NSArray *)reporters
 {
   if (self = [super init]) {
-    _buildSettings = [buildSettings retain];
-    _focusedTestCases = [focusedTestCases retain];
-    _allTestCases = [allTestCases retain];
-    _arguments = [arguments retain];
-    _environment = [environment retain];
+    _buildSettings = [buildSettings copy];
+    _focusedTestCases = [focusedTestCases copy];
+    _allTestCases = [allTestCases copy];
+    _arguments = [arguments copy];
+    _environment = [environment copy];
     _freshSimulator = freshSimulator;
     _resetSimulator = resetSimulator;
     _freshInstall = freshInstall;
-    _reporters = [reporters retain];
-    _framework = [FrameworkInfoForTestBundleAtPath([self testBundlePath]) retain];
+    _testTimeout = testTimeout;
+    _reporters = [reporters copy];
+    _framework = [FrameworkInfoForTestBundleAtPath([self testBundlePath]) copy];
     _cpuType = CPU_TYPE_ANY;
   }
   return self;
 }
 
-- (void)dealloc
-{
-  [_buildSettings release];
-  [_focusedTestCases release];
-  [_allTestCases release];
-  [_arguments release];
-  [_environment release];
-  [_reporters release];
-  [_framework release];
-  [super dealloc];
-}
 
 - (void)runTestsAndFeedOutputTo:(void (^)(NSString *))outputLineBlock
                    startupError:(NSString **)startupError
@@ -126,10 +131,10 @@
   while (!testSuiteState || [[testSuiteState unstartedTests] count]) {
     TestRunState *testRunState;
     if (!testSuiteState) {
-      testRunState = [[[TestRunState alloc] initWithTests:_focusedTestCases reporters:_reporters] autorelease];
-      testSuiteState = [testRunState.testSuiteState retain];
+      testRunState = [[TestRunState alloc] initWithTests:_focusedTestCases reporters:_reporters];
+      testSuiteState = testRunState.testSuiteState;
     } else {
-      testRunState = [[[TestRunState alloc] initWithTestSuiteEventState:testSuiteState] autorelease];
+      testRunState = [[TestRunState alloc] initWithTestSuiteEventState:testSuiteState];
     }
 
     void (^feedOutputToBlock)(NSString *) = ^(NSString *line) {
@@ -157,11 +162,9 @@
       [unstartedTestCases addObject:[NSString stringWithFormat:@"%@/%@", obj.className, obj.methodName]];
     }];
 
-    [_focusedTestCases release];
     _focusedTestCases = unstartedTestCases;
   }
 
-  [testSuiteState release];
   
   return allTestsPassed;
 }
@@ -172,6 +175,7 @@
   NSSet *allSet = [NSSet setWithArray:_allTestCases];
 
   NSString *testSpecifier = nil;
+  NSString *testSpecifierToFile = nil;
   BOOL invertScope = NO;
 
   if ((!ToolchainIsXcode6OrBetter() || TestableSettingsIndicatesApplicationTest(_buildSettings)) &&
@@ -207,7 +211,11 @@
     [invertedSet minusSet:focusedSet];
 
     NSArray *invertedTestCases = [[invertedSet allObjects] sortedArrayUsingSelector:@selector(compare:)];
-    testSpecifier = [invertedTestCases componentsJoinedByString:@","];
+    if ([invertedTestCases count]) {
+      testSpecifierToFile = [invertedTestCases componentsJoinedByString:@","];
+    } else {
+      testSpecifier = @"";
+    }
 
     invertScope = YES;
   }
@@ -221,14 +229,41 @@
            @"-NSTreatUnknownArgumentsAsOpen", @"NO",
            // Not sure exactly what this does...
            @"-ApplePersistenceIgnoreState", @"YES",
-           // SenTest / XCTest is one of Self, All, None,
-           // or TestClassName[/testCaseName][,TestClassName2]
-           [@"-" stringByAppendingString:_framework[kTestingFrameworkFilterTestArgsKey]], testSpecifier,
-           // SenTestInvertScope / XCTestInvertScope optionally inverts whatever
-           // SenTest would normally select. We never invert, since we always
-           // pass the exact list of test cases to be run.
+           // Optionally inverts whatever SenTest / XCTest would normally select.
            [@"-" stringByAppendingString:_framework[kTestingFrameworkInvertScopeKey]], invertScope ? @"YES" : @"NO",
-           ]];
+  ]];
+  if (testSpecifier) {
+    // SenTest / XCTest is one of Self, All, None,
+    // or TestClassName[/testCaseName][,TestClassName2]
+    [args addObjectsFromArray:@[
+      [@"-" stringByAppendingString:_framework[kTestingFrameworkFilterTestArgsKey]],
+      testSpecifier
+    ]];
+  } else if (testSpecifierToFile) {
+    NSString *testListFilePath = MakeTempFileWithPrefix([NSString stringWithFormat:@"otest_test_list_%@", HashForString(testSpecifierToFile)]);
+    NSError *writeError = nil;
+    if ([_framework[kTestingFrameworkFilterTestArgsKey] isEqual:@"XCTest"]) {
+      testListFilePath = [testListFilePath stringByAppendingPathExtension:@"plist"];
+      NSData *data = [NSPropertyListSerialization dataWithPropertyList:@{@"XCTestScope": [focusedSet allObjects]}
+                                                                format:NSPropertyListXMLFormat_v1_0
+                                                               options:0
+                                                                 error:&writeError];
+      NSAssert(data, @"Couldn't convert to property list format: %@, error: %@", testSpecifierToFile, writeError);
+      [data writeToFile:testListFilePath atomically:YES];
+      [args addObjectsFromArray:@[
+        @"-XCTestScopeFile", testListFilePath,
+        @"-XCTestInvertScope", @"NO",
+      ]];
+    } else {
+      if (![testSpecifierToFile writeToFile:testListFilePath atomically:NO encoding:NSUTF8StringEncoding error:&writeError]) {
+        NSAssert(NO, @"Couldn't save list of tests to run to a file at path %@; error: %@", testListFilePath, writeError);
+      }
+      [args addObjectsFromArray:@[
+        @"-OTEST_TESTLIST_FILE", testListFilePath,
+        @"-OTEST_FILTER_TEST_ARGS_KEY", _framework[kTestingFrameworkFilterTestArgsKey],
+      ]];
+    }
+  }
 
   // Add any argments that might have been specifed in the scheme.
   [args addObjectsFromArray:_arguments];
@@ -240,12 +275,19 @@
 {
   NSMutableDictionary *env = [NSMutableDictionary dictionary];
 
+  NSMutableDictionary *internalEnvironment = [NSMutableDictionary dictionary];
+  if (_testTimeout > 0) {
+    internalEnvironment[@"OTEST_SHIM_TEST_TIMEOUT"] = @(_testTimeout);
+  }
+
   NSArray *layers = @[
                       // Xcode will let your regular environment pass-thru to
                       // the test.
                       [[NSProcessInfo processInfo] environment],
                       // Any special environment vars set in the scheme.
                       _environment,
+                      // Internal environment that should be passed to xctool libs
+                      internalEnvironment,
                       // Whatever values we need to make the test run at all for
                       // ios/mac or logic/application tests.
                       overrides,

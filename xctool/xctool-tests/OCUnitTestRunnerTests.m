@@ -25,9 +25,9 @@ static id TestRunnerWithTestLists(Class cls, NSDictionary *settings, NSArray *fo
   NSArray *arguments = @[@"-SomeArg", @"SomeVal"];
   NSDictionary *environment = @{@"SomeEnvKey" : @"SomeEnvValue"};
 
-  EventBuffer *eventBuffer = [[[EventBuffer alloc] init] autorelease];
+  EventBuffer *eventBuffer = [[EventBuffer alloc] init];
 
-  return [[[cls alloc] initWithBuildSettings:settings
+  return [[cls alloc] initWithBuildSettings:settings
                             focusedTestCases:focusedTestCases
                                 allTestCases:allTestCases
                                    arguments:arguments
@@ -35,7 +35,8 @@ static id TestRunnerWithTestLists(Class cls, NSDictionary *settings, NSArray *fo
                               freshSimulator:NO
                               resetSimulator:NO
                                 freshInstall:NO
-                                   reporters:@[eventBuffer]] autorelease];
+                                 testTimeout:30
+                                   reporters:@[eventBuffer]];
 }
 
 static id TestRunnerWithTestList(Class cls, NSDictionary *settings, NSArray *testList)
@@ -74,7 +75,7 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                          withBlock:
    ^(SimulatorLauncher *self, SEL sel) {
      // Pretend it launched and succeeded, but save the config so we can check it.
-     *sessionConfig = [[self->_session sessionConfig] retain];
+     *sessionConfig = [[self valueForKey:@"session"] sessionConfig];
      return YES;
    }
                           runBlock:
@@ -90,7 +91,7 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                                                     encoding:NSUTF8StringEncoding
                                                        error:nil]);
 
-  NSMutableDictionary *testSettings = [[allSettings[@"TestProject-LibraryTests2"] mutableCopy] autorelease];
+  NSMutableDictionary *testSettings = [allSettings[@"TestProject-LibraryTests2"] mutableCopy];
   testSettings[@"TEST_HOST"] = TEST_DATA @"FakeApp.app/FakeApp";
 
   DTiPhoneSimulatorSessionConfig *config;
@@ -107,8 +108,9 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                              ]));
   assertThat([config simulatedApplicationLaunchEnvironment][@"SomeEnvKey"],
              equalTo(@"SomeEnvValue"));
+  assertThat([config simulatedApplicationLaunchEnvironment][@"OTEST_SHIM_TEST_TIMEOUT"],
+             equalTo(@30));
 
-  [config release];
 }
 
 - (void)testIOSApplicationTestWithBadTesthostFails
@@ -118,7 +120,7 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                                                     encoding:NSUTF8StringEncoding
                                                        error:nil]);
 
-  NSMutableDictionary *testSettings = [[allSettings[@"TestProject-LibraryTests2"] mutableCopy] autorelease];
+  NSMutableDictionary *testSettings = [allSettings[@"TestProject-LibraryTests2"] mutableCopy];
   testSettings[@"TEST_HOST"] = @"/var/empty/whee";
 
   DTiPhoneSimulatorSessionConfig *config;
@@ -141,7 +143,6 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
   assertThat(SelectEventFields(events, kReporter_Events_TestOuput, kReporter_TestOutput_OutputKey),
              equalTo(@[@"There was a problem starting the test bundle: TEST_HOST not executable."]));
 
-  [config release];
 }
 
 - (void)testArgsAndEnvArePassedToIOSLogicTest
@@ -166,6 +167,8 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                              ]));
   assertThat([launchedTasks[0] environment][@"SIMSHIM_SomeEnvKey"],
              equalTo(@"SomeEnvValue"));
+  assertThat([launchedTasks[0] environment][@"SIMSHIM_OTEST_SHIM_TEST_TIMEOUT"],
+             equalTo(@30));
 }
 
 #pragma mark OSX Tests
@@ -175,7 +178,7 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
 {
   [[FakeTaskManager sharedManager] runBlockWithFakeTasks:^{
     [runner runTests];
-    *launchedTasks = [[[FakeTaskManager sharedManager] launchedTasks] retain];
+    *launchedTasks = [[FakeTaskManager sharedManager] launchedTasks];
   }];
 }
 
@@ -186,7 +189,7 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                                                     encoding:NSUTF8StringEncoding
                                                        error:nil]);
 
-  NSMutableDictionary *testSettings = [[allSettings[@"TestProject-App-OSXTests"] mutableCopy] autorelease];
+  NSMutableDictionary *testSettings = [allSettings[@"TestProject-App-OSXTests"] mutableCopy];
   testSettings[@"TEST_HOST"] = TEST_DATA @"FakeApp.app/FakeApp";
 
   NSArray *launchedTasks;
@@ -202,6 +205,8 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                              ]));
   assertThat([launchedTasks[0] environment][@"SomeEnvKey"],
              equalTo(@"SomeEnvValue"));
+  assertThat([launchedTasks[0] environment][@"OTEST_SHIM_TEST_TIMEOUT"],
+             equalTo(@30));
 }
 
 - (void)testOSXApplicationTestWithBadTesthostFails
@@ -211,7 +216,7 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                                                     encoding:NSUTF8StringEncoding
                                                        error:nil]);
 
-  NSMutableDictionary *testSettings = [[allSettings[@"TestProject-App-OSXTests"] mutableCopy] autorelease];
+  NSMutableDictionary *testSettings = [allSettings[@"TestProject-App-OSXTests"] mutableCopy];
   testSettings[@"TEST_HOST"] = @"/var/empty/whee";
 
   NSArray *launchedTasks;
@@ -256,6 +261,8 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                              ]));
   assertThat([launchedTasks[0] environment][@"SomeEnvKey"],
              equalTo(@"SomeEnvValue"));
+  assertThat([launchedTasks[0] environment][@"OTEST_SHIM_TEST_TIMEOUT"],
+             equalTo(@30));
 }
 
 - (void)testTestArgumentsAlwaysIncludesCommonItems
@@ -316,19 +323,11 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
 
   // in Xcode 6 we are always inverting scope
   if (ToolchainIsXcode6OrBetter()) {
-    assertThat([runner testArguments],
-               containsArray(@[@"-SenTest",
-                               @"",
-                               @"-SenTestInvertScope",
-                               @"YES",
-                               ]));
+    assertThat([runner testArguments], containsArray(@[@"-SenTest", @""]));
+    assertThat([runner testArguments], containsArray(@[@"-SenTestInvertScope", @"YES"]));
   } else {
-    assertThat([runner testArguments],
-               containsArray(@[@"-SenTest",
-                               @"Self",
-                               @"-SenTestInvertScope",
-                               @"NO",
-                               ]));
+    assertThat([runner testArguments], containsArray(@[@"-SenTest", @"Self"]));
+    assertThat([runner testArguments], containsArray(@[@"-SenTestInvertScope", @"NO"]));
   }
 }
 
@@ -342,12 +341,8 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
 
   OCUnitTestRunner *runner = TestRunnerWithTestList([OCUnitTestRunner class], testSettings, @[@"Cls1/testA", @"Cls2/testB"]);
 
-  assertThat([runner testArguments],
-             containsArray(@[@"-SenTest",
-                             @"All",
-                             @"-SenTestInvertScope",
-                             @"NO",
-                             ]));
+  assertThat([runner testArguments], containsArray(@[@"-SenTest", @"All"]));
+  assertThat([runner testArguments], containsArray(@[@"-SenTestInvertScope", @"NO"]));
 }
 
 - (void)testTestSpecifierIsInvertedTestListWhenRunningSpecificTests
@@ -362,12 +357,13 @@ static int NumberOfEntries(NSArray *array, NSObject *target)
                                                      testSettings,
                                                      @[@"Cls1/testA"],
                                                      @[@"Cls1/testA", @"Cls2/testB"]);
-  assertThat([runner testArguments],
-             containsArray(@[@"-SenTest",
-                             @"Cls2/testB",
-                             @"-SenTestInvertScope",
-                             @"YES",
-                             ]));
+  assertThat([runner testArguments], containsArray(@[@"-OTEST_TESTLIST_FILE"]));
+  assertThat([runner testArguments], containsArray(@[@"-OTEST_FILTER_TEST_ARGS_KEY", @"SenTest"]));
+  assertThat([runner testArguments], containsArray(@[@"-SenTestInvertScope", @"YES"]));
+
+  NSString *testListFilePath = [runner testArguments][([[runner testArguments] indexOfObject:@"-OTEST_TESTLIST_FILE"] + 1)];
+  NSString *testList = [NSString stringWithContentsOfFile:testListFilePath encoding:NSUTF8StringEncoding error:nil];
+  assertThat(testList, equalTo(@"Cls2/testB"));
 }
 
 #pragma mark Tests crashing
